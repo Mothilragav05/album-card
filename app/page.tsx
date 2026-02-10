@@ -1,16 +1,19 @@
 'use client'
 
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import { BluetoothIcon, PlusIcon } from "lucide-react";
+import { useState } from "react";
 
 
 
 export default function Page() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('username');
 
 const { data: userData } = useQuery({
     queryKey: ['user'],
@@ -51,64 +54,95 @@ const { data: albumData } = useQuery({
     },
   })
 
+  console.log(userData)
+
 return (
-  <>
-    <div className="container mx-auto p-4">
-      
-        {userData?.map((user: any) => (
-          <>
-          <h1>{user.name}</h1>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          <Card key={user.id} className="relative w-full max-w-sm overflow-hidden pt-0">
-        <div className="bg-primary absolute inset-0 z-30 aspect-video opacity-50 mix-blend-color" />
-        <img
-          src="https://images.unsplash.com/photo-1604076850742-4c7221f3101b?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-          alt="Photo by mymind on Unsplash"
-          title="Photo by mymind on Unsplash"
-          className="relative z-20 aspect-video w-full object-cover brightness-60 grayscale"
+    <div className="container mx-auto p-4 space-y-8">
+      <div className="flex flex-col sm:flex-row justify-end items-center gap-4 sticky top-0 bg-background/95 backdrop-blur-sm z-50 py-4 border-b">
+        <Select value={filterType} onValueChange={(val) => val && setFilterType(val)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="username">Username</SelectItem>
+            <SelectItem value="album">Album Title</SelectItem>
+            <SelectItem value="photo">Photo ID</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input 
+          className="max-w-sm" 
+          placeholder="Search..." 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <CardHeader>
-          <CardTitle>Observability Plus is replacing Monitoring</CardTitle>
-          <CardDescription>
-            Switch to the improved way to explore your data, with natural
-            language. Monitoring will no longer be available on the Pro plan in
-            November, 2025
-          </CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <AlertDialog>
-            <AlertDialogTrigger render={<Button />}>
-              <PlusIcon data-icon="inline-start" />
-              Show Dialog
-            </AlertDialogTrigger>
-            <AlertDialogContent size="sm">
-              <AlertDialogHeader>
-                <AlertDialogMedia>
-                  <BluetoothIcon
-                  />
-                </AlertDialogMedia>
-                <AlertDialogTitle>Allow accessory to connect?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Do you want to allow the USB accessory to connect to this
-                  device?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Don&apos;t allow</AlertDialogCancel>
-                <AlertDialogAction>Allow</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <Badge variant="secondary" className="ml-auto">
-            Warning
-          </Badge>
-        </CardFooter>
-      </Card>
       </div>
-      </>
-      ))}
-      
+
+      {userData
+        ?.filter((user: any) => {
+          if (!searchTerm) return true;
+          if (filterType === 'username') {
+            return user.name.toLowerCase().includes(searchTerm.toLowerCase());
+          }
+          if (filterType === 'album') {
+             return albumData?.some((a: any) => a.userId === user.id && a.title.toLowerCase().includes(searchTerm.toLowerCase()));
+          }
+          if (filterType === 'photo') {
+             return albumData?.some((a: any) => a.userId === user.id && photoData?.some((p: any) => p.albumId === a.id && p.id.toString() === searchTerm));
+          }
+          return true;
+        })
+        .map((user: any) => {
+          const userAlbums = albumData?.filter((a: any) => a.userId === user.id) || [];
+          const filteredAlbums = userAlbums.filter((album: any) => {
+            if (!searchTerm) return true;
+            if (filterType === 'username') return true;
+            if (filterType === 'album') return album.title.toLowerCase().includes(searchTerm.toLowerCase());
+            if (filterType === 'photo') return photoData?.some((p: any) => p.albumId === album.id && p.id.toString() === searchTerm);
+            return true;
+          });
+
+          if (filteredAlbums.length === 0) return null;
+
+          return (
+            <div key={user.id} className="space-y-4">
+              <h1 className="text-2xl font-bold tracking-tight">{user.name}</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredAlbums.map((album: any) => {
+                   const albumPhotos = photoData?.filter((p: any) => p.albumId === album.id) || [];
+                   const filteredPhotos = albumPhotos.filter((photo: any) => {
+                       if (!searchTerm) return true;
+                       if (filterType === 'photo') return photo.id.toString() === searchTerm;
+                       return true;
+                   });
+
+                   return filteredPhotos.map((photo: any) => (
+                    <Card
+                      key={photo.id}
+                      className="relative w-full max-w-sm overflow-hidden pt-0 h-full flex flex-col hover:shadow-lg transition-shadow"
+                    >
+                      <img
+                        src={`https://picsum.photos/seed/${photo.id}/800/600`}
+                        alt={photo.title}
+                        title={photo.title}
+                        className="relative z-20 aspect-video w-full object-cover hover:scale-105 transition-transform duration-300"
+                      />
+                      <CardHeader>
+                        <CardTitle className="line-clamp-2 text-base">{photo.id} {album.title}</CardTitle>
+                      </CardHeader>
+                      <CardFooter className="mt-auto flex flex-col items-start gap-2 pt-0">
+                        <p className="text-xs text-muted-foreground break-all font-mono mt-2">
+                          <a href={photo.thumbnailUrl} target="_blank" rel="noreferrer" className="hover:underline text-primary">
+                            {photo.thumbnailUrl}
+                          </a>
+                        </p>
+                      </CardFooter>
+                    </Card>
+                  ));
+                })}
+              </div>
+            </div>
+          );
+        })}
     </div>
-  </>
-);
+  );
 }
